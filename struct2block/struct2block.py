@@ -1,6 +1,7 @@
 """
 struct2block.py: Detects functional block from aligned PDB files.
 Authors: Zhang Yujian
+Date: Jul, 2025
 """
 
 import typer
@@ -12,7 +13,7 @@ from biotite import structure as struc
 from biotite import sequence as seq
 
 
-def alignStruct(structA: struc.AtomArray, structB: struc.AtomArray) -> (struc.AtomArray, struc.AffineTransformation):
+def alignStruct(structA: struc.AtomArray, structB: struc.AtomArray) -> tuple[struc.AtomArray, struc.AffineTransformation]:
     """Align (superimpose) 2 structures with a shared peptide.
 
     Arg:
@@ -45,7 +46,7 @@ def alignStruct(structA: struc.AtomArray, structB: struc.AtomArray) -> (struc.At
         raise (Exception("No shared chain in two complex."))
     # Calculate transformation and superimposition.
     _, transformation = struc.superimpose(structA[structA.chain_id == anchorA], structB[structB.chain_id == anchorB])
-    structC = transformation.apply(structB)
+    structC: struc.AtomArray = transformation.apply(structB)
     return (structC, transformation)
 
 
@@ -67,15 +68,26 @@ def struct2block(complex: Annotated[str, typer.Argument(help="The PDB file conta
     # Load Antigen-Ligand complex
     ligComplex_file: pdb.PDBFile = pdb.PDBFile.read(complex)
     ligComplex: structure.AtomArray = ligComplex_file.get_structure(model=1)
-    
     # Load Antigen-Antibody complex
     antiComplex_file: pdb.PDBFile = pdb.PDBFile.read(anti)
     antiComplex: struc.AtomArray = antiComplex_file.get_structure(model=1)
-    
-    # Find the same chains
-    
-    # Align and find antigen
-    alignStruct(ligComplex, antiComplex)
+    # Alignment
+    superimposedAntiComplex, transformation = alignStruct(ligComplex, antiComplex)
+    # Find ligand and antibody
+    notLigandId: int = -1
+    notAntibodyId: int = -1
+    complexChains: list[str] = np.unique(ligComplex.chain_id)
+    antiChains: list[str] = np.unique(antiComplex.chain_id)
+    for candiLigandId in range(len(complexChains)):
+        for candiAntiId in range(len(antiChains)):
+            if (struc.to_sequence(ligComplex[ligComplex.chain_id == complexChains[candiLigandId]])[0][0] == \
+                struc.to_sequence(antiComplex[antiComplex.chain_id == antiChains[candiAntiId]])[0][0]):
+                notLigandId = candiLigandId
+                notAntibodyId = candiAntiId
+                break
+    ligandId: str = np.delete(complexChains, notLigandId)[0]
+    antibodyId: str = np.delete(antiChains, notAntibodyId)[0]
+    print(ligandId, antibodyId)
     # Create voxel of ligand
     # Mark voxel occupied by antibody
     # Calculate    
