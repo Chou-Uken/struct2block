@@ -11,6 +11,8 @@ import numpy as np
 from biotite.structure.io import pdb
 from biotite import structure as struc
 from biotite import sequence as seq
+import os
+from rich.progress import Progress
 
 
 def alignStruct(structA: struc.AtomArray, structB: struc.AtomArray) -> tuple[struc.AtomArray, struc.AffineTransformation]:
@@ -52,14 +54,12 @@ def alignStruct(structA: struc.AtomArray, structB: struc.AtomArray) -> tuple[str
 
 
 def struct2block(complex: Annotated[str, typer.Argument(help="The PDB file contains 1 model: Antigen-Ligand.")], \
-                 anti: Annotated[str, typer.Argument(help="The PDB file contains 1 model: Antigen-Antibody.")], \
-                 resolution: Annotated[float, typer.Argument(help="Resolution selected for calculation")] = 1.) -> float:
+                 anti: Annotated[str, typer.Argument(help="The PDB file contains 1 model: Antigen-Antibody.")]) -> float:
     """Calculate the block rate of antibody. block rate = V(ligand occupied by Antibody) / V(ligand)
     
     Args:
         complex (str): PDB file containing Antigen-Ligand model.
         anti (str): PDB file containing Antigen-Antibody model.
-        resolution (float): Voxel size.
 
     Returns:
         blockRate (float): block rate.
@@ -87,10 +87,41 @@ def struct2block(complex: Annotated[str, typer.Argument(help="The PDB file conta
                 break
     ligandId: str = np.delete(complexChains, notLigandId)[0]
     antibodyId: str = np.delete(antiChains, notAntibodyId)[0]
-    print(ligandId, antibodyId)
+    print(f"Find Ligand: Chain {ligandId} in '{complex}'")
+    print(f"Find Antibody: Chain {antibodyId} in '{anti}'")
     # Create voxel of ligand
+    ligandStruct: struc.AtomArray = ligComplex[ligComplex.chain_id == ligandId]
+    AntibodyStruct: struc.AtomArray = superimposedAntiComplex[superimposedAntiComplex.chain_id == antibodyId]
+    xMin: np.float32 = np.floor(np.min(ligandStruct.coord[:,0])) - 3.
+    xMax: np.float32 = np.ceil(np.max(ligandStruct.coord[:,0])) + 3.
+    yMin: np.float32 = np.floor(np.min(ligandStruct.coord[:,1])) - 3.
+    yMax: np.float32 = np.ceil(np.max(ligandStruct.coord[:,1])) + 3.
+    zMin: np.float32 = np.floor(np.min(ligandStruct.coord[:,2])) - 3.
+    zMax: np.float32 = np.ceil(np.max(ligandStruct.coord[:,2])) + 3.
+    xSize: np.int64 = np.int64(xMax - xMin + 1)
+    ySize: np.int64 = np.int64(yMax - yMin + 1)
+    zSize: np.int64 = np.int64(zMax - zMin + 1)
+    shape: tuple[np.int64, np.int64, np.int64] = (xSize, ySize, zSize)
+    voxels: np.ndarray = np.zeros(shape, dtype=bool)
     # Mark voxel occupied by antibody
-    # Calculate    
+    atomRadii: dict[str, np.float32] = {}
+    with Progress() as progress:
+        
+    with open(os.path.join(os.path.dirname(__file__), "data", "van_der_Waals_Radii.csv"), mode="r") as f:
+        lines: list[str] = list(map(lambda x:x.strip("\n"), f.readlines()[1:]))
+        for line in lines:
+            atomRadii[line.split(",")[0]] = np.float32(line.split(",")[1])
+        for atom in ligandStruct:
+            zoneCenter: np.ndarray = np.array([np.int64(atom.coord[0]-xMin), np.int64(atom.coord[1]-yMin), np.int64(atom.coord[2]-zMin)])
+            for zoneX in range(zoneCenter[0]-3, zoneCenter[0]+4):
+                for zoneY in range(zoneCenter[1]-3, zoneCenter[1]+4):
+                    for zoneZ in range(zoneCenter[2]-3, zoneCenter[2]+4):
+                        dist: np.float32 = struc.distance(np.array([zoneX, zoneY, zoneZ]), atom.coord - np.array([xMin, yMin, zMin]))
+                        if (dist <= atomRadii[atom.element]):
+                            voxels[zoneX, zoneY, zoneZ] = True
+    print(voxels.size)
+        
+    # Calculate
     # print(type(superimposed))
     # print(type(transformation))
 
