@@ -29,11 +29,6 @@ def alignStruct(structA: struc.AtomArray, structB: struc.AtomArray) -> tuple[str
     # Find the same chains
     structAChains: list[str] = np.unique(structA.chain_id)
     structBChains: list[str] = np.unique(structB.chain_id)
-    # Chains valid.
-    if (len(structAChains) != 2):
-        raise (Exception(f"{len(structAChains)} detected in Antigen-Ligand complex, 2 expected."))
-    if (len(structBChains) != 2):
-        raise (Exception(f"{len(structBChains)} detected in Antigen-Antibody complex, 2 expected."))
     # Get each chain sequence and find anchor chains
     anchorA: str = "mark"
     anchorB: str = "mark"
@@ -85,13 +80,17 @@ def struct2block(complex: Annotated[str, typer.Argument(help="The PDB file conta
                 notLigandId = candiLigandId
                 notAntibodyId = candiAntiId
                 break
-    ligandId: str = np.delete(complexChains, notLigandId)[0]
-    antibodyId: str = np.delete(antiChains, notAntibodyId)[0]
-    print(f"Find Ligand: Chain {ligandId} in '{complex}'")
-    print(f"Find Antibody: Chain {antibodyId} in '{anti}'")
+    ligandId: str = np.delete(complexChains, notLigandId)
+    antibodyId: str = np.delete(antiChains, notAntibodyId)
+    print(f"Found Ligand: Chain {ligandId} in '{complex}'")
+    print(f"Found Antibody: Chain {antibodyId} in '{anti}'")
     # Create voxel of ligand
-    ligandStruct: struc.AtomArray = ligComplex[ligComplex.chain_id == ligandId]
-    AntibodyStruct: struc.AtomArray = superimposedAntiComplex[superimposedAntiComplex.chain_id == antibodyId]
+    ligandStruct: struc.AtomArray = ligComplex[ligComplex.chain_id != notLigandId]
+    antibodyStruct: struc.AtomArray = superimposedAntiComplex[superimposedAntiComplex.chain_id != notAntibodyId]
+    # Remvoe hydrogen
+    ligandStruct = ligandStruct[ligandStruct.element != "H"]
+    antibodyStruct = antibodyStruct[antibodyStruct.element != "H"]
+
     xMin: np.float32 = np.floor(np.min(ligandStruct.coord[:,0])) - 3.
     xMax: np.float32 = np.ceil(np.max(ligandStruct.coord[:,0])) + 3.
     yMin: np.float32 = np.floor(np.min(ligandStruct.coord[:,1])) - 3.
@@ -102,28 +101,51 @@ def struct2block(complex: Annotated[str, typer.Argument(help="The PDB file conta
     ySize: np.int64 = np.int64(yMax - yMin + 1)
     zSize: np.int64 = np.int64(zMax - zMin + 1)
     shape: tuple[np.int64, np.int64, np.int64] = (xSize, ySize, zSize)
-    voxels: np.ndarray = np.zeros(shape, dtype=bool)
-    # Mark voxel occupied by antibody
+    ligVoxels: np.ndarray = np.zeros(shape, dtype=bool)
     atomRadii: dict[str, np.float32] = {}
+    print(f"Created {ligVoxels.size} voxels totally.")
     with Progress() as progress:
-        
-    with open(os.path.join(os.path.dirname(__file__), "data", "van_der_Waals_Radii.csv"), mode="r") as f:
-        lines: list[str] = list(map(lambda x:x.strip("\n"), f.readlines()[1:]))
-        for line in lines:
-            atomRadii[line.split(",")[0]] = np.float32(line.split(",")[1])
-        for atom in ligandStruct:
-            zoneCenter: np.ndarray = np.array([np.int64(atom.coord[0]-xMin), np.int64(atom.coord[1]-yMin), np.int64(atom.coord[2]-zMin)])
-            for zoneX in range(zoneCenter[0]-3, zoneCenter[0]+4):
-                for zoneY in range(zoneCenter[1]-3, zoneCenter[1]+4):
-                    for zoneZ in range(zoneCenter[2]-3, zoneCenter[2]+4):
-                        dist: np.float32 = struc.distance(np.array([zoneX, zoneY, zoneZ]), atom.coord - np.array([xMin, yMin, zMin]))
-                        if (dist <= atomRadii[atom.element]):
-                            voxels[zoneX, zoneY, zoneZ] = True
-    print(voxels.size)
-        
+        task1 = progress.add_task("Marking atoms of ligand...", total = len(ligandStruct))
+        with open(os.path.join(os.path.dirname(__file__), "data", "van_der_Waals_Radii.csv"), mode="r") as f:
+            lines: list[str] = list(map(lambda x:x.strip("\n"), f.readlines()[1:]))
+            for line in lines:
+                atomRadii[line.split(",")[0]] = np.float32(line.split(",")[1])
+            for atom in ligandStruct:
+                zoneCenter: np.ndarray = np.array([np.int64(atom.coord[0]-xMin), np.int64(atom.coord[1]-yMin), np.int64(atom.coord[2]-zMin)])
+                for zoneX in range(zoneCenter[0]-3, zoneCenter[0]+4):
+                    for zoneY in range(zoneCenter[1]-3, zoneCenter[1]+4):
+                        for zoneZ in range(zoneCenter[2]-3, zoneCenter[2]+4):
+                            dist: np.float32 = struc.distance(np.array([zoneX, zoneY, zoneZ]), atom.coord - np.array([xMin, yMin, zMin]))
+                            if (dist <= atomRadii[atom.element]):
+                                ligVoxels[zoneX, zoneY, zoneZ] = True
+                progress.update(task1, advance=1)
+    
+        ligandVoxelNum: np.int64 = np.count_nonzero(ligVoxels)
+    
+        antiVoxels: np.ndarray = np.zeros(shape, dtype=bool)
+        task2 = progress.add_task("Marking atoms of antibody...", total = len(antibodyStruct))
+        with open(os.path.join(os.path.dirname(__file__), "data", "van_der_Waals_Radii.csv"), mode="r") as f:
+            lines: list[str] = list(map(lambda x:x.strip("\n"), f.readlines()[1:]))
+            for line in lines:
+                atomRadii[line.split(",")[0]] = np.float32(line.split(",")[1])
+            for atom in antibodyStruct:
+                zoneCenter: np.ndarray = np.array([np.int64(atom.coord[0]-xMin), np.int64(atom.coord[1]-yMin), np.int64(atom.coord[2]-zMin)])
+                for zoneX in range(zoneCenter[0]-3, zoneCenter[0]+4):
+                    for zoneY in range(zoneCenter[1]-3, zoneCenter[1]+4):
+                        for zoneZ in range(zoneCenter[2]-3, zoneCenter[2]+4):
+                            dist: np.float32 = struc.distance(np.array([zoneX, zoneY, zoneZ]), atom.coord - np.array([xMin, yMin, zMin]))
+                            if (dist > atomRadii[atom.element]):
+                                try:
+                                    antiVoxels[zoneX, zoneY, zoneZ] = True
+                                except IndexError:
+                                    pass
+                                else:
+                                    pass
+                progress.update(task2, advance=1)
+    ligVoxels = ligVoxels & antiVoxels    
     # Calculate
-    # print(type(superimposed))
-    # print(type(transformation))
+    blockRate: np.float32 = np.count_nonzero(ligVoxels) / ligandVoxelNum
+    print(f"Block rate: {np.round(blockRate * 100, 2)}%. (Ligand volumn {ligandVoxelNum} Å^3, antibody occupies {np.count_nonzero(ligVoxels)} Å^3)")
 
 
 if __name__ == "__main__":
