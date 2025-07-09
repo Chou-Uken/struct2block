@@ -5,6 +5,7 @@ Date: Jul, 2025
 """
 
 import typer
+from typing import Optional
 from typing_extensions import Annotated
 from rich import print
 import numpy as np
@@ -50,23 +51,26 @@ def alignStruct(structA: struc.AtomArray, structB: struc.AtomArray) -> tuple[str
                 anchorB = candiAnchorB
                 bestIdent = ident
                 bestAlignment = alignment
-    # Hinted by Biotite examples
+    if (bestIdent < 0.6):
+        print(f"Warning. Low identity of shared antigen: {np.round(bestIdent, 4)*100}%.")
     alignCode: np.ndarray = align.get_codes(bestAlignment)
     anchorMask: np.ndarray = ((matrix.score_matrix()[alignCode[0], alignCode[1]]) & (alignCode != -1).all(axis=0))
     anchorMask = np.array(anchorMask, dtype=bool)
     superimpositionAnchor: np.ndarray = bestAlignment.trace[anchorMask]
     # Calculate transformation and superimposition.
-    
-    _, transformation = struc.superimpose(structA[structA.atom_name == "CA"][superimpositionAnchor[:, 0]], \
-                                          structB[structB.atom_name == "CA"][superimpositionAnchor[:, 1]])
+    sharedA: struc.AtomArray = structA[structA.chain_id == anchorA]
+    sharedB: struc.AtomArray = structB[structB.chain_id == anchorB]
+    _, transformation = struc.superimpose(sharedA[sharedA.atom_name == "CA"][superimpositionAnchor[:, 0]], \
+                                          sharedB[sharedB.atom_name == "CA"][superimpositionAnchor[:, 1]])
     structC: struc.AtomArray = transformation.apply(structB)
     return (structC, transformation, anchorA, anchorB)
 
 
 
 def struct2block(complex: Annotated[str, typer.Argument(help="The PDB file contains 1 model: Antigen-Ligand.")], \
-                 anti: Annotated[str, typer.Argument(help="The PDB file contains 1 model: Antigen-Antibody.")]) -> float:
-    """Calculate the block rate of antibody. block rate = V(ligand occupied by Antibody) / V(ligand)
+                 anti: Annotated[str, typer.Argument(help="The PDB file contains 1 model: Antigen-Antibody.")], \
+                 prefix: Annotated[Optional[str], typer.Argument(help="The file you want to store the superimposed structures in. Antigen-Ligand complex will be in {prefix}_ligand.pdb. Antigen-Antibody will be in {prefix}_antibody.pdb")] = None) -> float:
+    """Calculate the steric clash volume (block rate) of antibody.  = V(ligand occupied by Antibody) / V(ligand)
     
     Args:
         complex (str): PDB file containing Antigen-Ligand model.
@@ -93,11 +97,10 @@ def struct2block(complex: Annotated[str, typer.Argument(help="The PDB file conta
     print(f"Found Antibody: Chain {antibodyId} in '{anti}'")
     # Create voxel of ligand
     ligandStruct: struc.AtomArray = ligComplex[ligComplex.chain_id != notLigandId]
-    antibodyStruct: struc.AtomArray = superimposedAntiComplex[superimposedAntiComplex.chain_id != notAntibodyId]
+    antibodyStruct: struc.AtomArray = superimposedAntiComplex[superimposedAntiComplex.chain_id != "C"]
     # Remvoe hydrogen
     ligandStruct = ligandStruct[ligandStruct.element != "H"]
     antibodyStruct = antibodyStruct[antibodyStruct.element != "H"]
-    print(len(ligandStruct), len(antibodyStruct))
     xMin: np.float32 = np.floor(np.min(ligandStruct.coord[:,0])) - 3.
     xMax: np.float32 = np.ceil(np.max(ligandStruct.coord[:,0])) + 3.
     yMin: np.float32 = np.floor(np.min(ligandStruct.coord[:,1])) - 3.
@@ -152,8 +155,14 @@ def struct2block(complex: Annotated[str, typer.Argument(help="The PDB file conta
     ligVoxels = ligVoxels & antiVoxels    
     # Calculate
     blockRate: np.float32 = np.count_nonzero(ligVoxels) / ligandVoxelNum
-    print(f"Block rate: {np.round(blockRate * 100, 2)}%. (Ligand volumn {ligandVoxelNum} Å^3, antibody occupies {np.count_nonzero(ligVoxels)} Å^3)")
-
+    print(f"Block rate: {np.round(blockRate * 100, 2)}%. (Ligand volume {ligandVoxelNum} Å^3, antibody occupies {np.count_nonzero(ligVoxels)} Å^3)")
+    if (prefix):
+        file1 = pdb.PDBFile()
+        file2 = pdb.PDBFile()
+        file1.set_structure(ligComplex)
+        file2.set_structure(superimposedAntiComplex)
+        file1.write(prefix + "_ligand.pdb")
+        file2.write(prefix + "_antibody.pdb")
 
 if __name__ == "__main__":
     typer.run(struct2block)
