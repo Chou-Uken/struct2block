@@ -75,7 +75,8 @@ def struct2block(complex: Annotated[str, typer.Argument(help="The PDB file conta
     Args:
         complex (str): PDB file containing Antigen-Ligand model.
         anti (str): PDB file containing Antigen-Antibody model.
-
+        prefix (str): The file prefix you want to store the superimposed complex structures.
+    
     Returns:
         blockRate (float): block rate.
     """
@@ -163,7 +164,12 @@ def struct2block(complex: Annotated[str, typer.Argument(help="The PDB file conta
         file2.set_structure(superimposedAntiComplex)
         file1.write(prefix + "_ligand.pdb")
         file2.write(prefix + "_antibody.pdb")
+    return (blockRate)
+
+def main():
+    typer.run(struct2block)
+
 
 if __name__ == "__main__":
-    typer.run(struct2block)
+    main()
     
