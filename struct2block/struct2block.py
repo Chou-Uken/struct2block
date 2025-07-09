@@ -11,11 +11,12 @@ import numpy as np
 from biotite.structure.io import pdb
 from biotite import structure as struc
 from biotite import sequence as seq
+from biotite.sequence import align
 import os
 from rich.progress import Progress
 
 
-def alignStruct(structA: struc.AtomArray, structB: struc.AtomArray) -> tuple[struc.AtomArray, struc.AffineTransformation]:
+def alignStruct(structA: struc.AtomArray, structB: struc.AtomArray) -> tuple[struc.AtomArray, struc.AffineTransformation, str, str]:
     """Align (superimpose) 2 structures with a shared peptide.
 
     Arg:
@@ -23,7 +24,7 @@ def alignStruct(structA: struc.AtomArray, structB: struc.AtomArray) -> tuple[str
         structB (struc.AtomArray): Mobile structure.
 
     Returns:
-        (superimposed structB, transformation)
+        (superimposed structB, transformation, anchorCom, anchorAnti)
     """
 
     # Find the same chains
@@ -32,19 +33,34 @@ def alignStruct(structA: struc.AtomArray, structB: struc.AtomArray) -> tuple[str
     # Get each chain sequence and find anchor chains
     anchorA: str = "mark"
     anchorB: str = "mark"
+    bestIdent: float = 0.
+    alph: seq.LetterAlphabet = seq.ProteinSequence.alphabet
+    scores: np.ndarray = np.identity(len(alph), dtype=int)
+    matrix: align.SubstitutionMatrix = align.SubstitutionMatrix(alph, alph, scores)
     for candiAnchorA in structAChains:
         for candiAnchorB in structBChains:
-            if (struc.to_sequence(structA[structA.chain_id == candiAnchorA])[0][0] == \
-                struc.to_sequence(structB[structB.chain_id == candiAnchorB])[0][0]):
+            alignment: align.Alignment = align.align_optimal(
+                struc.to_sequence(structA[structA.chain_id == candiAnchorA])[0][0],
+                struc.to_sequence(structB[structB.chain_id == candiAnchorB])[0][0],
+                matrix
+            )[0]
+            ident: float = align.get_sequence_identity(alignment)
+            if (ident > bestIdent):
                 anchorA = candiAnchorA
                 anchorB = candiAnchorB
-                break
-    if ((anchorA == "mark") or (anchorB == "mark")):
-        raise (Exception("No shared chain in two complex."))
+                bestIdent = ident
+                bestAlignment = alignment
+    # Hinted by Biotite examples
+    alignCode: np.ndarray = align.get_codes(bestAlignment)
+    anchorMask: np.ndarray = ((matrix.score_matrix()[alignCode[0], alignCode[1]]) & (alignCode != -1).all(axis=0))
+    anchorMask = np.array(anchorMask, dtype=bool)
+    superimpositionAnchor: np.ndarray = bestAlignment.trace[anchorMask]
     # Calculate transformation and superimposition.
-    _, transformation = struc.superimpose(structA[structA.chain_id == anchorA], structB[structB.chain_id == anchorB])
+    
+    _, transformation = struc.superimpose(structA[structA.atom_name == "CA"][superimpositionAnchor[:, 0]], \
+                                          structB[structB.atom_name == "CA"][superimpositionAnchor[:, 1]])
     structC: struc.AtomArray = transformation.apply(structB)
-    return (structC, transformation)
+    return (structC, transformation, anchorA, anchorB)
 
 
 
@@ -67,21 +83,12 @@ def struct2block(complex: Annotated[str, typer.Argument(help="The PDB file conta
     antiComplex_file: pdb.PDBFile = pdb.PDBFile.read(anti)
     antiComplex: struc.AtomArray = antiComplex_file.get_structure(model=1)
     # Alignment
-    superimposedAntiComplex, transformation = alignStruct(ligComplex, antiComplex)
+    superimposedAntiComplex, transformation, notLigandId, notAntibodyId = alignStruct(ligComplex, antiComplex)
     # Find ligand and antibody
-    notLigandId: int = -1
-    notAntibodyId: int = -1
     complexChains: list[str] = np.unique(ligComplex.chain_id)
     antiChains: list[str] = np.unique(antiComplex.chain_id)
-    for candiLigandId in range(len(complexChains)):
-        for candiAntiId in range(len(antiChains)):
-            if (struc.to_sequence(ligComplex[ligComplex.chain_id == complexChains[candiLigandId]])[0][0] == \
-                struc.to_sequence(antiComplex[antiComplex.chain_id == antiChains[candiAntiId]])[0][0]):
-                notLigandId = candiLigandId
-                notAntibodyId = candiAntiId
-                break
-    ligandId: str = np.delete(complexChains, notLigandId)
-    antibodyId: str = np.delete(antiChains, notAntibodyId)
+    ligandId: str = np.delete(complexChains, np.where(complexChains == notLigandId))
+    antibodyId: str = np.delete(antiChains, np.where(antiChains == notAntibodyId))
     print(f"Found Ligand: Chain {ligandId} in '{complex}'")
     print(f"Found Antibody: Chain {antibodyId} in '{anti}'")
     # Create voxel of ligand
@@ -90,7 +97,7 @@ def struct2block(complex: Annotated[str, typer.Argument(help="The PDB file conta
     # Remvoe hydrogen
     ligandStruct = ligandStruct[ligandStruct.element != "H"]
     antibodyStruct = antibodyStruct[antibodyStruct.element != "H"]
-
+    print(len(ligandStruct), len(antibodyStruct))
     xMin: np.float32 = np.floor(np.min(ligandStruct.coord[:,0])) - 3.
     xMax: np.float32 = np.ceil(np.max(ligandStruct.coord[:,0])) + 3.
     yMin: np.float32 = np.floor(np.min(ligandStruct.coord[:,1])) - 3.
