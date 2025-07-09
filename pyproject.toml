@@ -27,7 +27,7 @@ license = "Apache-2.0"
 license-files = ["LICEN[CS]E*"]
 
 [project.scripts]
-struct2block = "struct2block:main"
+struct2block = "struct2block.struct2block:main"
 
 [project.urls]
 Homepage = "https://github.com/Chou-Uken/struct2block"
