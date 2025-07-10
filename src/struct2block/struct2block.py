@@ -70,14 +70,15 @@ def alignStruct(structA: struc.AtomArray, structB: struc.AtomArray) -> tuple[str
 def struct2block(complex: Annotated[str, typer.Argument(help="The PDB file contains 1 model: Antigen-Ligand.")], \
                  anti: Annotated[str, typer.Argument(help="The PDB file contains 1 model: Antigen-Antibody.")], \
                  prefix: Annotated[Optional[str], typer.Argument(help="The file you want to store the superimposed structures in. Antigen-Ligand complex will be in {prefix}_ligand.pdb. Antigen-Antibody will be in {prefix}_antibody.pdb")] = None, \
-                 quiet: Annotated[Optional[str], typer.Argument(help="")]) -> float:
+                 quiet: Annotated[bool, typer.Option("--quiet", "-q", help="Suppress the output.")] = False) -> float:
     """Calculate the steric clash volume (block rate) of antibody.  = V(ligand occupied by Antibody) / V(ligand)
     
     Args:
         complex (str): PDB file containing Antigen-Ligand model.
         anti (str): PDB file containing Antigen-Antibody model.
         prefix (str): The file prefix you want to store the superimposed complex structures.
-    
+        quiet (bool): If true, suppress the output.
+
     Returns:
         blockRate (float): block rate.
     """
@@ -95,8 +96,9 @@ def struct2block(complex: Annotated[str, typer.Argument(help="The PDB file conta
     antiChains: list[str] = np.unique(antiComplex.chain_id)
     ligandId: str = np.delete(complexChains, np.where(complexChains == notLigandId))
     antibodyId: str = np.delete(antiChains, np.where(antiChains == notAntibodyId))
-    print(f"Found Ligand: Chain {ligandId} in '{complex}'")
-    print(f"Found Antibody: Chain {antibodyId} in '{anti}'")
+    if (not quiet):
+        print(f"Found Ligand: Chain {ligandId} in '{complex}'")
+        print(f"Found Antibody: Chain {antibodyId} in '{anti}'")
     # Create voxel of ligand
     ligandStruct: struc.AtomArray = ligComplex[ligComplex.chain_id != notLigandId]
     antibodyStruct: struc.AtomArray = superimposedAntiComplex[superimposedAntiComplex.chain_id != "C"]
@@ -115,7 +117,8 @@ def struct2block(complex: Annotated[str, typer.Argument(help="The PDB file conta
     shape: tuple[np.int64, np.int64, np.int64] = (xSize, ySize, zSize)
     ligVoxels: np.ndarray = np.zeros(shape, dtype=bool)
     atomRadii: dict[str, np.float32] = {}
-    print(f"Created {ligVoxels.size} voxels totally.")
+    if (not quiet):
+        print(f"Created {ligVoxels.size} voxels totally.")
     with Progress() as progress:
         task1 = progress.add_task("Marking atoms of ligand...", total = len(ligandStruct))
         with open(os.path.join(os.path.dirname(__file__), "data", "van_der_Waals_Radii.csv"), mode="r") as f:
@@ -157,7 +160,8 @@ def struct2block(complex: Annotated[str, typer.Argument(help="The PDB file conta
     ligVoxels = ligVoxels & antiVoxels    
     # Calculate
     blockRate: np.float32 = np.count_nonzero(ligVoxels) / ligandVoxelNum
-    print(f"Block rate: {np.round(blockRate * 100, 2)}%. (Ligand volume {ligandVoxelNum} Å^3, antibody occupies {np.count_nonzero(ligVoxels)} Å^3)")
+    if (not quiet):
+        print(f"Block rate: {np.round(blockRate * 100, 2)}%. (Ligand volume {ligandVoxelNum} Å^3, antibody occupies {np.count_nonzero(ligVoxels)} Å^3)")
     if (prefix):
         file1 = pdb.PDBFile()
         file2 = pdb.PDBFile()
