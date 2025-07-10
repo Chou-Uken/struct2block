@@ -12,6 +12,8 @@ If you have two different proteins that bind to the same target protein. Struct2
 ## How to use
 
 
+
+
 ## How does it work
 It calculate the space (A) occupied by the ligand (V(ligand)). Then calculate the space occupied by antibody in space A (V(antibody | ligand)). Then the steric clash volume of ligand (called 'block rate')
 

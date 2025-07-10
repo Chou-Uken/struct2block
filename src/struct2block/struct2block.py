@@ -69,7 +69,8 @@ def alignStruct(structA: struc.AtomArray, structB: struc.AtomArray) -> tuple[str
 
 def struct2block(complex: Annotated[str, typer.Argument(help="The PDB file contains 1 model: Antigen-Ligand.")], \
                  anti: Annotated[str, typer.Argument(help="The PDB file contains 1 model: Antigen-Antibody.")], \
-                 prefix: Annotated[Optional[str], typer.Argument(help="The file you want to store the superimposed structures in. Antigen-Ligand complex will be in {prefix}_ligand.pdb. Antigen-Antibody will be in {prefix}_antibody.pdb")] = None) -> float:
+                 prefix: Annotated[Optional[str], typer.Argument(help="The file you want to store the superimposed structures in. Antigen-Ligand complex will be in {prefix}_ligand.pdb. Antigen-Antibody will be in {prefix}_antibody.pdb")] = None, \
+                 quiet: Annotated[Optional[str], typer.Argument(help="")]) -> float:
     """Calculate the steric clash volume (block rate) of antibody.  = V(ligand occupied by Antibody) / V(ligand)
     
     Args:
