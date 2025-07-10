@@ -8,6 +8,17 @@ If you have two different proteins that bind to the same target protein. Struct2
 
 ## 1 Install
 
+### 1.1 pip
+```console
+pip install struct2block
+```
+
+### 1.2 conda
+```conda
+conda install chou_uken::struct2block
+mamba install chou_uken::struct2block
+```
+
 
 ## 2 How to use
 
