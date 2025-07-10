@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "struct2block"
+version = "1.1"
+authors = [
+  {name="Zhang Yujian", emails="Chouuken@outlook.com"},
+]
+maintainers = [
+  {name="Zhang Yujian", emails="Chouuken@outlook.com"}
+]
+description = "Detect functional block of protein. If you have two different proteins that bind to the same target protein. Struct2Block is an easy tool designed for quickly evaluating the following situations:1) An antibody binds to a receptor. To what extent does it sterically hinder the ligand. 2)2 different ligands bind to the same receptor. To what degree does they compete."
+dependencies = [
+  "biotite>=1.3",
+  "numpy>=2.3.1",
+  "typer>=0.16",
+]
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+]
+license = "Apache-2.0"
+license-files = ["LICEN[CS]E*"]
+
+[project.scripts]
+struct2block = "struct2block.struct2block:main"
+
+[project.urls]
+Homepage = "https://github.com/Chou-Uken/struct2block"
+Issues = "https://github.com/Chou-Uken/struct2block/issues"
+
