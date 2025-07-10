@@ -53,6 +53,6 @@ br: float = struct2block(complex="antigen-ligand.pdb", anti="antigen-antibody.pd
 ```
 
 ## 3 How does it work
-First, Struct2Block find the most similar shared chain in two PDB files as antigen. Then it calculates the space (**V_ligand**) occupied by the ligand in the antigen-ligand complex. Next, it calculates the volume of that same space that is now occupied by the antibody in the antigen-antibody complex (**V_antibody ∩ ligand**). A (V(antibody | ligand)). Then the steric clash volume of ligand (called 'block rate')
+First, Struct2Block find the most similar shared chain in two PDB files as antigen. Then it calculates the space (**V_ligand**) occupied by the ligand in the antigen-ligand complex. Next, it calculates the volume of that same space that is now occupied by the antibody in the antigen-antibody complex (**V_antibody ∩ ligand**). Then the steric clash volume of ligand (called 'block rate')
 
 block rate = V(antibody ∩ ligand) / V(ligand)
