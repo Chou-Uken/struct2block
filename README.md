@@ -1,10 +1,10 @@
 # Struct2Block
-**Detect functional block.**
-</hr>
-If you have two different proteins that bind to the same target protein. Struct2Block is an easy tool to use for you who want to check these things quickly:
+**Detect functional blocking.**
+
+If you have two different proteins that bind to the same target protein. Struct2Block is an easy tool designed for quickly evaluating the following situations:
 
 * An antibody binds to a receptor. To what extent does it sterically hinder the ligand.
-* 2 different ligand binds to the same receptor. To what degree does they compete.
+* 2 different ligands bind to the same receptor. To what degree does they compete.
 
 ## 1 Install
 
@@ -22,7 +22,7 @@ For example, you can use this command line:
 ```console
 struct2block A.pdb B.pdb
 ```
-It will use A.pdb as Antigen-ligand and B.pdb as Antibody-antigen. Then some details will be printed in the console. If you don't need any output, use option `-q` or `--quiet`.
+It will use A.pdb as antigen-ligand complex and B.pdb as Antibody-antigen complex. Then some details and results will be printed in the console. If you don't need any output, use option `-q` or `--quiet`.
 You can also output superimposed structures with following command line.
 ```console
 struct2block A.pdb B.pdb prefix
@@ -32,7 +32,8 @@ Then your structures will be output as prefix_antibody.pdb and prefix_ligand.pdb
 ### 2.2 As a Python API
 ```python
 def struct2block(complex: str, anti: str, prefix: str=None, quiet: bool=False) -> float:
-    """Calculate the steric clash volume (block rate) of antibody.  = V(ligand occupied by Antibody) / V(ligand)
+    """Calculate the steric clash volume (block rate) of antibody.
+    Block rate = Volume of ligand occupied by antibody / Total volume of ligand
     
     Args:
         complex (str): PDB file containing Antigen-Ligand model.
@@ -52,6 +53,6 @@ br: float = struct2block(complex="antigen-ligand.pdb", anti="antigen-antibody.pd
 ```
 
 ## 3 How does it work
-First, Struct2Block find the most similar shared chain in two PDB files as antigen. Then, it calculate the space (A) occupied by the ligand (V(ligand)). Then calculate the space occupied by antibody in space A (V(antibody | ligand)). Then the steric clash volume of ligand (called 'block rate')
+First, Struct2Block find the most similar shared chain in two PDB files as antigen. Then it calculates the space (**V_ligand**) occupied by the ligand in the antigen-ligand complex. Next, it calculates the volume of that same space that is now occupied by the antibody in the antigen-antibody complex (**V_antibody ∩ ligand**). A (V(antibody | ligand)). Then the steric clash volume of ligand (called 'block rate')
 
-block rate = V(antibody | ligand) / V(ligand)
+block rate = V(antibody ∩ ligand) / V(ligand)
